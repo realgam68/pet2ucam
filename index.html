@@ -41,6 +41,7 @@
   .dot{width:10px;height:10px;border-radius:50%;background:var(--warn);flex:none}
   .dot.ok{background:var(--ok);box-shadow:0 0 0 4px rgba(53,208,127,.18)}
   .dot.bad{background:var(--bad)}
+  .dot.off{background:#5b6070}
   .code{font-family:ui-monospace,Menlo,monospace;font-size:34px;font-weight:800;letter-spacing:.08em;
     text-align:center;background:var(--card);border-radius:16px;padding:16px;box-shadow:0 0 0 1px var(--line);margin:6px 0 4px}
   .hint{color:var(--muted);font-size:13px;text-align:center;margin-bottom:14px}
@@ -73,6 +74,11 @@
   .pill{border:0;border-radius:999px;background:rgba(0,0,0,.45);color:#fff;font-size:14px;font-weight:600;
     padding:9px 12px;font-family:inherit;box-shadow:0 0 0 1px rgba(255,255,255,.18);white-space:nowrap}
   .pill:active{background:rgba(255,255,255,.28)}
+  /* botón de sonido ambiente: rojo = apagado, verde = encendido */
+  #soundBtn{font-weight:800;letter-spacing:.02em;color:#fff;box-shadow:0 1px 6px rgba(0,0,0,.5)}
+  #soundBtn.off{background:#d93a3f}
+  #soundBtn.on{background:#1fa95b}
+  #soundBtn:active{filter:brightness(1.15)}
   #ctrls{position:absolute;left:12px;bottom:calc(16px + env(safe-area-inset-bottom));display:flex;flex-direction:column;
     align-items:flex-start;gap:8px;z-index:3;transition:opacity .25s}
   /* botón de hablar: chico y redondo, en la esquina */
@@ -146,8 +152,8 @@
   <input class="codein" id="codeIn" placeholder="abc-def-ghk" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="11">
   <button class="btn" id="watchBtn">Ver ahora</button>
   <div class="webonly webhelp">
-    <p class="small">🔊 El video arranca sin sonido. Tocá <b>🔇 Sonido</b> para escuchar.</p>
-    <p class="small">🎤 Para hablarle, mantené apretado el micrófono (o tocalo una vez y otra vez para cortar). La primera vez el navegador te pide permiso.</p>
+    <p class="small">🔊 El video arranca sin sonido. Tocá <b>🔇 SONIDO: OFF</b> para escuchar (se pone en verde).</p>
+    <p class="small">🎤 Para hablarle, tocá el micrófono una vez y queda hablando; tocalo otra vez para cortar. Mientras hablás seguís escuchando. La primera vez el navegador te pide permiso.</p>
     <p class="small">📱 En iPhone: si bloqueás la pantalla o cambiás de app, se corta. Al volver, tocá <b>Ver ahora</b>.</p>
   </div>
 </section>
@@ -183,7 +189,7 @@
   <button id="zoomTag">1x · tocá para volver</button>
   <div class="diag" id="viewDiag"></div>
   <div id="ctrls">
-    <button class="pill" id="soundBtn">🔇 Sonido</button>
+    <button class="pill off" id="soundBtn">🔇 SONIDO: OFF</button>
     <button class="pill" id="qBtn">📶 Normal</button>
     <button class="pill" id="rFlipBtn">🔄 Cámara</button>
   </div>
@@ -241,7 +247,7 @@ try{if(localStorage.getItem("mode")==="cam")localStorage.setItem("mode","")}catc
 </script>
 <script>
 (() => {
-    const APP_VER = "2.1",
+    const APP_VER = "2.4",
         PREFIX = "gammascota-",
         ABC = "abcdefghjkmnpqrstuvwxyz23456789",
         $ = id => document.getElementById(id),
@@ -599,7 +605,7 @@ try{if(localStorage.getItem("mode")==="cam")localStorage.setItem("mode","")}catc
         setStatus("relayDot", "relayStatus", "Probando conexi\xF3n para datos m\xF3viles\u2026");
         const servers = onlyTurn(await iceServers()),
             r = await probeNetwork(servers, 9e3);
-        cam.relay = r, cam.alive && (r.relay ? setStatus("relayDot", "relayStatus", "Respaldo para datos m\xF3viles: funcionando \u2705", "ok") : setStatus("relayDot", "relayStatus", "Respaldo para datos m\xF3viles: no responde. Con wifi anda igual; para datos m\xF3viles revis\xE1 Ajustes.", "bad"))
+        cam.relay = r, cam.alive && (r.relay ? setStatus("relayDot", "relayStatus", "Respaldo para datos m\xF3viles: funcionando \u2705", "ok") : setStatus("relayDot", "relayStatus", "Respaldo extra: no disponible. Normalmente no hace falta, la c\xE1mara funciona igual con wifi o datos.", "off"))
     }
     async function connectCamPeer(code) {
         if (!cam.alive) return;
@@ -927,13 +933,18 @@ try{if(localStorage.getItem("mode")==="cam")localStorage.setItem("mode","")}catc
     };
     QUAL[v.q] || (v.q = "media");
 
+    function updSoundBtn() {
+        const b = $("soundBtn");
+        b.textContent = v.muted ? "\u{1F507} SONIDO: OFF" : "\u{1F50A} SONIDO: ON", b.className = "pill " + (v.muted ? "off" : "on")
+    }
+
     function startView() {
         const code = clean($("codeIn").value);
         if (code.length !== 9) {
             $("codeIn").focus(), $("codeIn").style.boxShadow = "0 0 0 2px var(--bad)";
             return
         }
-        store.set("viewCode", code), store.set("mode", "view"), v.code = code, v.alive = !0, v.fails = 0, v.live = !1, show("view"), resetZoom(), showUI(), updateQBtn(), viewConnect()
+        store.set("viewCode", code), store.set("mode", "view"), v.code = code, v.alive = !0, v.fails = 0, v.live = !1, show("view"), resetZoom(), showUI(), updateQBtn(), updSoundBtn(), viewConnect()
     }
 
     function viewMsg(t) {
@@ -998,7 +1009,7 @@ try{if(localStorage.getItem("mode")==="cam")localStorage.setItem("mode","")}catc
                 if (call !== v.call || peer !== v.peer) return;
                 clearTimeout(v.timeout);
                 const vid = $("remote");
-                vid.srcObject !== s && (vid.srcObject = s), vid.muted = v.talking ? !0 : v.muted;
+                vid.srcObject !== s && (vid.srcObject = s), vid.muted = v.muted;
                 const p = vid.play();
                 p && p.catch && p.catch(() => {}), v.live = !0, v.fails = 0, v.frames = -1, v.framesAt = now(), viewMsg(""), setStatus("viewDot", "viewStatus", "En vivo", "ok"), autoHideUI()
             }), call.on("close", () => {
@@ -1199,13 +1210,13 @@ try{if(localStorage.getItem("mode")==="cam")localStorage.setItem("mode","")}catc
                         }
                         v.mic && (v.mic.getTracks().forEach(t => t.stop()), v.mic = null)
                     }
-                }, 6e4)), on && (navigator.vibrate && navigator.vibrate(30), talkHint(v.latched ? "Hablando\u2026 toc\xE1 \u{1F3A4} para cortar" : "Hablando\u2026 solt\xE1 para terminar"), !await ensureTalkCall())) {
+                }, 6e4)), on && (navigator.vibrate && navigator.vibrate(30), v.muted && (v.muted = !1, updSoundBtn(), (() => { const p = $("remote").play(); p && p.catch && p.catch(() => {}) })()), talkHint("Hablando\u2026 toc\xE1 \u{1F3A4} para cortar"), !await ensureTalkCall())) {
                 v.talking = !1, v.latched = !1, $("talkBtn").classList.remove("on"), talkHint("");
                 return
             }
             if (v.mic && v.mic.getAudioTracks().forEach(t => {
                     t.enabled = v.talking
-                }), $("remote").muted = v.talking ? !0 : v.muted, v.conn && v.conn.open) try {
+                }), $("remote").muted = v.muted, v.conn && v.conn.open) try {
                 v.conn.send({
                     cmd: "talk",
                     on: v.talking
@@ -1221,11 +1232,11 @@ try{if(localStorage.getItem("mode")==="cam")localStorage.setItem("mode","")}catc
         try {
             tb.setPointerCapture(e.pointerId)
         } catch (x) {}
-        if (showUI(), v.latched) {
-            v.latched = !1, tbIgnoreUp = !0, talk(!1);
+        if (showUI(), v.talking || v.latched) {
+            v.latched = !1, talk(!1);
             return
         }
-        tbDownAt = now(), talk(!0)
+        v.latched = !0, talk(!0)
     });
     const tbUp = () => {
         if (tbIgnoreUp) {
@@ -1240,9 +1251,7 @@ try{if(localStorage.getItem("mode")==="cam")localStorage.setItem("mode","")}catc
             talk(!1)
         }
     };
-    tb.addEventListener("pointerup", tbUp), tb.addEventListener("pointercancel", () => {
-        v.latched || talk(!1)
-    }), tb.addEventListener("contextmenu", e => e.preventDefault());
+    tb.addEventListener("contextmenu", e => e.preventDefault());
     let uiTimer = null;
 
     function showUI() {
@@ -1450,7 +1459,7 @@ try{if(localStorage.getItem("mode")==="cam")localStorage.setItem("mode","")}catc
                 cmd: "flip"
             }), viewMsgFlash("Cambiando de c\xE1mara\u2026"))
         }, $("soundBtn").onclick = () => {
-            v.muted = !v.muted, v.talking || ($("remote").muted = v.muted), $("soundBtn").textContent = v.muted ? "\u{1F507} Sonido" : "\u{1F50A} Sonido";
+            v.muted = !v.muted, $("remote").muted = v.muted, updSoundBtn();
             const p = $("remote").play();
             p && p.catch && p.catch(() => {})
         }, $("viewStatus").parentNode.onclick = () => {
